@@ -195,6 +195,8 @@ import _ from 'lodash'
 import { get, sync } from 'vuex-pathify'
 import markdownHelp from './markdown/help.vue'
 import gql from 'graphql-tag'
+import createAssetFoldersRecursivelyMutation from 'gql/editor/editor-media-mutation-folder-create-recursively.gql'
+import Cookies from 'js-cookie'
 import DOMPurify from 'dompurify'
 
 /* global siteConfig, siteLangs */
@@ -455,22 +457,59 @@ export default {
     onCmInput: _.debounce(function (newContent) {
       this.processContent(newContent)
     }, 600),
-    onCmPaste (cm, ev) {
-      // const clipItems = (ev.clipboardData || ev.originalEvent.clipboardData).items
-      // for (let clipItem of clipItems) {
-      //   if (_.startsWith(clipItem.type, 'image/')) {
-      //     const file = clipItem.getAsFile()
-      //     const reader = new FileReader()
-      //     reader.onload = evt => {
-      //       this.$store.commit(`loadingStart`, 'editor-paste-image')
-      //       this.insertAfter({
-      //         content: `![${file.name}](${evt.target.result})`,
-      //         newLine: true
-      //       })
-      //     }
-      //     reader.readAsDataURL(file)
-      //   }
-      // }
+    async onCmPaste (cm, ev) {
+      const clipItems = (ev.clipboardData || ev.originalEvent.clipboardData).items
+      for (let clipItem of clipItems) {
+        if (_.startsWith(clipItem.type, 'image/')) {
+          this.$store.commit(`loadingStart`, 'editor-markdown-pasteImage')
+          const file = clipItem.getAsFile()
+          const now = new Date()
+          let filename = `image_${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}_${parseInt(Math.random() * (10 ** 5))}`
+          filename += file.name.slice(file.name.lastIndexOf('.'))
+
+          const folder = await this.createAssetFolder(this.path)
+          if (folder) {
+            const form = new FormData()
+            form.append('mediaUpload', JSON.stringify({ 'folderId': folder.folderId }))
+            form.append('mediaUpload', file, filename)
+
+            const jwtToken = Cookies.get('jwt')
+            fetch('/u', {
+              method: 'POST',
+              body: form,
+              headers: {
+                'Authorization': `Bearer ${jwtToken}`
+              }
+            }).then(() => {
+              this.insertAtCursor({content: `![${filename}](${folder.folderPath}/${filename})`})
+            })
+            this.$store.commit(`loadingStop`, 'editor-markdown-pasteImage')
+          }
+        }
+      }
+    },
+    async createAssetFolder(path) {
+      let result = null
+      try {
+        const resp = await this.$apollo.mutate({
+          mutation: createAssetFoldersRecursivelyMutation,
+          variables: {
+            path: path
+          }
+        })
+
+        if (_.get(resp, 'data.assets.createFoldersRecursively.responseResult.succeeded', false)) {
+          result = {
+            folderId: _.get(resp, 'data.assets.createFoldersRecursively.folderId'),
+            folderPath: _.get(resp, 'data.assets.createFoldersRecursively.folderPath')
+          }
+        } else {
+          this.$store.commit('pushGraphError', new Error(_.get(resp, 'data.assets.createFoldersRecursively.responseResult.message')))
+        }
+      } catch (err) {
+        this.$store.commit('pushGraphError', err)
+      }
+      return result
     },
     processContent (newContent) {
       linesMap = []

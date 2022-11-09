@@ -36,6 +36,10 @@ type AssetMutation {
     name: String
   ): DefaultResponse @auth(requires: ["manage:system", "write:assets"])
 
+  createFoldersRecursively(
+    path: String!
+  ): FolderResponse @auth(requires: ["manage:system", "write:assets"])
+
   renameAsset(
     id: Int!
     filename: String!
@@ -76,4 +80,10 @@ enum AssetKind {
   IMAGE
   BINARY
   ALL
+}
+
+type FolderResponse {
+  responseResult: ResponseStatus!
+  folderId: Int!
+  folderPath: String!
 }

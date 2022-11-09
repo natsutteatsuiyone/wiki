@@ -72,6 +72,42 @@ module.exports = {
       }
     },
     /**
+     * Create New Asset Folders Recursively
+     */
+    async createFoldersRecursively(obj, args, context) {
+      try {
+        const folderSlugs = args.path.split('/').filter(s => s !== '').map(s => sanitize(s).toLowerCase())
+
+        let folderId = null
+        for (const folderSlug of folderSlugs) {
+          let result = await WIKI.models.assetFolders.query().where({
+            parentId: folderId,
+            slug: folderSlug
+          }).first()
+          if (!result) {
+            await WIKI.models.assetFolders.query().insert({
+              slug: folderSlug,
+              name: folderSlug,
+              parentId: folderId
+            })
+            result = await WIKI.models.assetFolders.query().where({
+              parentId: folderId,
+              slug: folderSlug
+            }).first()
+          }
+          folderId = result.id
+        }
+
+        return {
+          responseResult: graphHelper.generateSuccess('Asset Folders has been created successfully.'),
+          folderId: folderId === null ? 0 : folderId,
+          folderPath: `/${folderSlugs.join('/')}`
+        }
+      } catch (err) {
+        return graphHelper.generateError(err)
+      }
+    },
+    /**
      * Rename an Asset
      */
     async renameAsset(obj, args, context) {

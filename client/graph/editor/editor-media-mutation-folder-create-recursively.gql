@@ -1,0 +1,14 @@
+mutation ($path: String!) {
+  assets {
+    createFoldersRecursively(path: $path) {
+      responseResult {
+        succeeded
+        errorCode
+        slug
+        message,
+      },
+      folderId,
+      folderPath
+    }
+  }
+}
